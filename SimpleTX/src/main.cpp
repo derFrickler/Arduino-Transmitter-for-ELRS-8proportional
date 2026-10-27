@@ -42,12 +42,8 @@ int previous_throttle = 191;
 int loopCount = 0; // for ELRS seeting
 
 int AUX1_Arm = 0; // switch values read from the digital pin
-#ifdef USE_3POS_SWITCH_AS_CHANNEL_6
-    int AUX2_value_HIGH= 0;
-    int AUX2_value_LOW = 0;
-#else
-    int AUX2_value_LOW = 0;
-#endif
+int AUX2_value_HIGH = 0;
+int AUX2_value_LOW = 0;
 int AUX2_value = 0;
 int AUX3_value = 0;
 int AUX4_value = 0;
@@ -76,7 +72,7 @@ bool calStatus=false;
 // -----------------------------------------------------------------------------------------------------
 // Calibration
 
-#define CALIB_MARK      0x55
+#define CALIB_MARK      0x56
 #define CALIB_MARK_ADDR 0x00
 #define CALIB_VAL_ADDR  CALIB_MARK_ADDR + 1
 
@@ -97,17 +93,28 @@ struct CalibValues {
     int rudderMin;
     int rudderMax;
     int rudderCenter;
+    int ch6Min;
+    int ch6Max;
+    int ch7Min;
+    int ch7Max;
+    int ch8Min;
+    int ch8Max;
+    int ch9Min;
+    int ch9Max;
 };
 
 CalibValues calValues;
+bool calibrationStarted = false;
+unsigned long calibrationProcessStart;
 
 bool calibrationPresent() {
     return EEPROM.read(CALIB_MARK_ADDR) == CALIB_MARK;
 }
 
 void calibrationSave() {
-    EEPROM.update(CALIB_MARK_ADDR, CALIB_MARK);
+    EEPROM.update(CALIB_MARK_ADDR, (uint8_t)0xFF);
     EEPROM.put(CALIB_VAL_ADDR, calValues);
+    EEPROM.update(CALIB_MARK_ADDR, CALIB_MARK);
 }
 
 void calibrationLoad() {
@@ -115,21 +122,25 @@ void calibrationLoad() {
 }
 
 void calibrationReset() {
-    EEPROM.put(CALIB_MARK_ADDR, (uint8_t)0xFF);
-    calValues = {
-        .aileronMin     = ANALOG_CUTOFF,
-        .aileronMax     = 1023 - ANALOG_CUTOFF,
-        .aileronCenter  = 988,
-        .elevatorMin    = ANALOG_CUTOFF,
-        .elevatorMax    = 1023 - ANALOG_CUTOFF,
-        .elevatorCenter = 988,
-        .thrMin         = ANALOG_CUTOFF,
-        .thrMax         = 1023 - ANALOG_CUTOFF,
-        .rudderMin      = ANALOG_CUTOFF,
-        .rudderMax      = 1023 - ANALOG_CUTOFF,
-        .rudderCenter    = 988,
-    };
-    EEPROM.put(CALIB_VAL_ADDR, calValues);
+    calValues.aileronMin = ANALOG_CUTOFF;
+    calValues.aileronMax = ADC_MAX - ANALOG_CUTOFF;
+    calValues.aileronCenter = ADC_MID;
+    calValues.elevatorMin = ANALOG_CUTOFF;
+    calValues.elevatorMax = ADC_MAX - ANALOG_CUTOFF;
+    calValues.elevatorCenter = ADC_MID;
+    calValues.thrMin = ANALOG_CUTOFF;
+    calValues.thrMax = ADC_MAX - ANALOG_CUTOFF;
+    calValues.rudderMin = ANALOG_CUTOFF;
+    calValues.rudderMax = ADC_MAX - ANALOG_CUTOFF;
+    calValues.rudderCenter = ADC_MID;
+    calValues.ch6Min = ADC_MIN;
+    calValues.ch6Max = ADC_MAX;
+    calValues.ch7Min = ADC_MIN;
+    calValues.ch7Max = ADC_MAX;
+    calValues.ch8Min = ADC_MIN;
+    calValues.ch8Max = ADC_MAX;
+    calValues.ch9Min = ADC_MIN;
+    calValues.ch9Max = ADC_MAX;
 }
 
 uint8_t aux2cnt = 0;
@@ -202,29 +213,31 @@ bool calibrationRequested() {
 bool calibrationProcess() {
     aux2cnt = 0;
 
-    //calibrationChirp(2);    // start calibration
-
-    // Reset variables to "centers"
-
-    while(cal_reset<1){
-    const int centerValue = (1023 - ANALOG_CUTOFF - ANALOG_CUTOFF) / 2;
-    calValues.aileronMin     = centerValue;
-    calValues.aileronMax     = centerValue;
-    calValues.aileronCenter  = centerValue;
-    calValues.elevatorMin    = centerValue;
-    calValues.elevatorMax    = centerValue;
-    calValues.elevatorCenter = centerValue;
-    calValues.thrMin         = centerValue;
-    calValues.thrMax         = centerValue;
-    calValues.rudderMin      = centerValue;
-    calValues.rudderMax      = centerValue;
-    calValues.rudderCenter   = centerValue;
-    cal_reset++;
+    if (!calibrationStarted) {
+        calibrationReset();
+        calValues.aileronMin = ADC_MAX;
+        calValues.aileronMax = ADC_MIN;
+        calValues.elevatorMin = ADC_MAX;
+        calValues.elevatorMax = ADC_MIN;
+        calValues.thrMin = ADC_MAX;
+        calValues.thrMax = ADC_MIN;
+        calValues.rudderMin = ADC_MAX;
+        calValues.rudderMax = ADC_MIN;
+        calValues.ch6Min = ADC_MAX;
+        calValues.ch6Max = ADC_MIN;
+        calValues.ch7Min = ADC_MAX;
+        calValues.ch7Max = ADC_MIN;
+        calValues.ch8Min = ADC_MAX;
+        calValues.ch8Max = ADC_MIN;
+        calValues.ch9Min = ADC_MAX;
+        calValues.ch9Max = ADC_MIN;
+        calibrationProcessStart = millis();
+        calibrationStarted = true;
     }
 
-    currentMillis = millis();
+    currentMillis = millis() - calibrationProcessStart;
 
-    if (currentMillis <CALIB_CENT_TMO){
+    if (currentMillis < CALIB_CENT_TMO) {
         // A Center
         int val = analogRead(analogInPinAileron);
         calValues.aileronCenter = val;
@@ -248,7 +261,7 @@ bool calibrationProcess() {
         
     }
     // 15 seconds for moving sticks
-    else if (currentMillis > CALIB_CENT_TMO && currentMillis < CALIB_TMO){
+    else if (currentMillis < CALIB_TMO) {
     //while ((calibrationTimerStart + CALIB_TMO ) < millis()) {
         // A Min-Max
         int val = analogRead(analogInPinAileron);
@@ -285,6 +298,24 @@ bool calibrationProcess() {
             calValues.rudderMax = val;
         }
 
+        val = analogRead(analogInPinCH6);
+        if (val < calValues.ch6Min) calValues.ch6Min = val;
+        if (val > calValues.ch6Max) calValues.ch6Max = val;
+
+        val = analogRead(analogInPinCH7);
+        if (val < calValues.ch7Min) calValues.ch7Min = val;
+        if (val > calValues.ch7Max) calValues.ch7Max = val;
+
+        val = analogRead(analogInPinCH8);
+        if (val < calValues.ch8Min) calValues.ch8Min = val;
+        if (val > calValues.ch8Max) calValues.ch8Max = val;
+
+#ifdef USE_A7_AS_CH9
+        val = analogRead(analogInPinCH9);
+        if (val < calValues.ch9Min) calValues.ch9Min = val;
+        if (val > calValues.ch9Max) calValues.ch9Max = val;
+#endif
+
         // Double beep and blink every 500ms
         if (millis() % 500 == 0) {
            // calibrationChirp(2);
@@ -305,14 +336,63 @@ bool calibrationProcess() {
         Serial.print(calValues.thrMin);
         Serial.print(" Max:");
         Serial.print(calValues.thrMax);
+        Serial.print(" CH6Min:");
+        Serial.print(calValues.ch6Min);
+        Serial.print(" Max:");
+        Serial.print(calValues.ch6Max);
+        Serial.print(" CH7Min:");
+        Serial.print(calValues.ch7Min);
+        Serial.print(" Max:");
+        Serial.print(calValues.ch7Max);
+        Serial.print(" CH8Min:");
+        Serial.print(calValues.ch8Min);
+        Serial.print(" Max:");
+        Serial.print(calValues.ch8Max);
+        Serial.print(" CH9Min:");
+        Serial.print(calValues.ch9Min);
+        Serial.print(" Max:");
+        Serial.print(calValues.ch9Max);
         Serial.println();
 
 
     }
     else {
-        Serial.println("Calibration Done");  
+        if (calValues.aileronMax <= calValues.aileronMin) {
+            calValues.aileronMin = ANALOG_CUTOFF;
+            calValues.aileronMax = ADC_MAX - ANALOG_CUTOFF;
+        }
+        if (calValues.elevatorMax <= calValues.elevatorMin) {
+            calValues.elevatorMin = ANALOG_CUTOFF;
+            calValues.elevatorMax = ADC_MAX - ANALOG_CUTOFF;
+        }
+        if (calValues.thrMax <= calValues.thrMin) {
+            calValues.thrMin = ANALOG_CUTOFF;
+            calValues.thrMax = ADC_MAX - ANALOG_CUTOFF;
+        }
+        if (calValues.rudderMax <= calValues.rudderMin) {
+            calValues.rudderMin = ANALOG_CUTOFF;
+            calValues.rudderMax = ADC_MAX - ANALOG_CUTOFF;
+        }
+        if (calValues.ch6Max <= calValues.ch6Min) {
+            calValues.ch6Min = ADC_MIN;
+            calValues.ch6Max = ADC_MAX;
+        }
+        if (calValues.ch7Max <= calValues.ch7Min) {
+            calValues.ch7Min = ADC_MIN;
+            calValues.ch7Max = ADC_MAX;
+        }
+        if (calValues.ch8Max <= calValues.ch8Min) {
+            calValues.ch8Min = ADC_MIN;
+            calValues.ch8Max = ADC_MAX;
+        }
+        if (calValues.ch9Max <= calValues.ch9Min) {
+            calValues.ch9Min = ADC_MIN;
+            calValues.ch9Max = ADC_MAX;
+        }
+        Serial.println("Calibration Done");
         calibrationSave();
         calStatus = false;
+        calibrationStarted = false;
     }
     return true;
 
@@ -383,6 +463,45 @@ bool checkStickMove(){
     }
 }
 
+static int16_t mapToCrsfValue(int rawValue) {
+    rawValue = constrain(rawValue, ADC_MIN, ADC_MAX);
+    return map(rawValue, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
+}
+
+static int mapCalibratedAnalogValue(int rawValue, int minimum, int maximum) {
+    if (maximum <= minimum) {
+        return constrain(rawValue, ADC_MIN, ADC_MAX);
+    }
+
+    rawValue = constrain(rawValue, minimum, maximum);
+    return map(rawValue, minimum, maximum, ADC_MIN, ADC_MAX);
+}
+
+static int mapCalibratedStickValue(int rawValue, int minimum, int center, int maximum) {
+    if (maximum <= minimum) {
+        return constrain(rawValue, ADC_MIN, ADC_MAX);
+    }
+
+    rawValue = constrain(rawValue, minimum, maximum);
+    center = constrain(center, minimum, maximum);
+    if (rawValue <= center) {
+        return center <= minimum
+            ? ADC_MID
+            : map(rawValue, minimum, center, ADC_MIN, ADC_MID);
+    }
+    return maximum <= center
+        ? ADC_MID
+        : map(rawValue, center, maximum, ADC_MID + 1, ADC_MAX);
+}
+
+static int applyAnalogOffsetAndDeadband(int rawValue, int offset, int deadband) {
+    rawValue = constrain(rawValue + offset, ADC_MIN, ADC_MAX);
+    if (abs(rawValue - ADC_MID) <= deadband) {
+        return ADC_MID;
+    }
+    return rawValue;
+}
+
 void setup()
 {
     // inialize rc data
@@ -392,21 +511,18 @@ void setup()
 
     analogReference(EXTERNAL);
     pinMode(DIGITAL_PIN_SWITCH_ARM, INPUT_PULLUP);
-    #ifdef USE_3POS_SWITCH_AS_CHANNEL_6
-        pinMode(DIGITAL_PIN_SWITCH_AUX2_HIGH, INPUT_PULLUP);
-        pinMode(DIGITAL_PIN_SWITCH_AUX2_LOW, INPUT_PULLUP);
-    #else
-        pinMode(DIGITAL_PIN_SWITCH_AUX2, INPUT_PULLUP);
-    #endif
-    pinMode(DIGITAL_PIN_SWITCH_AUX3, INPUT_PULLUP);
-    if (DIGITAL_PIN_SWITCH_AUX4 != 0){
-      pinMode(DIGITAL_PIN_SWITCH_AUX4, INPUT_PULLUP);
-    }
+    pinMode(DIGITAL_PIN_SWITCH_AUX2_HIGH, INPUT_PULLUP);
+    pinMode(DIGITAL_PIN_SWITCH_AUX2_LOW, INPUT_PULLUP);
+    pinMode(DIGITAL_PIN_SWITCH_AUX3_HIGH, INPUT_PULLUP);
+    pinMode(DIGITAL_PIN_SWITCH_AUX3_LOW, INPUT_PULLUP);
+    pinMode(DIGITAL_PIN_SWITCH_AUX4_HIGH, INPUT_PULLUP);
+    pinMode(DIGITAL_PIN_SWITCH_AUX4_LOW, INPUT_PULLUP);
+    pinMode(DIGITAL_PIN_SWITCH_AUX8, INPUT_PULLUP);
     pinMode(DIGITAL_PIN_LED, OUTPUT);    // LED
     pinMode(DIGITAL_PIN_BUZZER, OUTPUT); // BUZZER
 #ifdef PASSIVE_BUZZER
     digitalWrite(DIGITAL_PIN_BUZZER, LOW); // BUZZER OFF
-    if(STARTUP_MELODY!=""){
+    if (STARTUP_MELODY != nullptr && STARTUP_MELODY[0] != '\0') {
       rtttl::begin(DIGITAL_PIN_BUZZER, STARTUP_MELODY);
     }
 #endif
@@ -426,7 +542,7 @@ void setup()
 #endif
 
 #ifdef PASSIVE_BUZZER
-    if(STARTUP_MELODY!="") {
+    if (STARTUP_MELODY != nullptr && STARTUP_MELODY[0] != '\0') {
       while( !rtttl::done() ) {
         rtttl::play();
       }
@@ -465,8 +581,11 @@ void setup()
 
     digitalWrite(DIGITAL_PIN_LED, HIGH); // LED ON
     
-    //calibrationReset();
-    calibrationLoad();
+    if (calibrationPresent()) {
+        calibrationLoad();
+    } else {
+        calibrationReset();
+    }
 }
 
 void loop()
@@ -481,7 +600,8 @@ void loop()
     #endif
     uint32_t currentMicros = micros();
 
-    // Read Voltage
+    // A7 is reserved for CH9 when that option is enabled.
+#ifndef USE_A7_AS_CH9
     batteryVoltage = analogRead(VOLTAGE_READ_PIN) / VOLTAGE_SCALE; //98.5
 #ifdef DEBUG
     Serial.print("batteryVoltage:");
@@ -498,6 +618,13 @@ void loop()
     }else if(currentSetting == 4){
         blinkLED(DIGITAL_PIN_LED, 1000); // Wifi (slow flash)
     }
+#else
+    if (currentSetting == 3) {
+        blinkLED(DIGITAL_PIN_LED, 100);
+    } else if (currentSetting == 4) {
+        blinkLED(DIGITAL_PIN_LED, 1000);
+    }
+#endif
 
     if (checkStickMove() == true){
         blinkLED(DIGITAL_PIN_LED, 100);
@@ -515,32 +642,17 @@ void loop()
      * Handle analog input
      */
     // constrain to avoid overflow
-    int analogVal = analogRead(analogInPinAileron);
-    if (analogVal <= calValues.aileronCenter){
-        Aileron_value = map(analogVal,calValues.aileronMin,   calValues.aileronCenter, ADC_MIN, ADC_MID);
-    }
-    else{
-        Aileron_value = map(analogVal,calValues.aileronCenter,   calValues.aileronMax, ADC_MID+1, ADC_MAX);
-    }
+    int analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinAileron), Aileron_OFFSET, ANALOG_DEADBAND);
+    Aileron_value = mapCalibratedStickValue(analogVal, calValues.aileronMin, calValues.aileronCenter, calValues.aileronMax);
     
-    analogVal = analogRead(analogInPinElevator);
-    if (analogVal <= calValues.elevatorCenter){
-        Elevator_value = map(analogVal,calValues.elevatorMin,   calValues.elevatorCenter, ADC_MIN, ADC_MID);
-    }
-    else{
-        Elevator_value = map(analogVal,calValues.elevatorCenter,   calValues.elevatorMax, ADC_MID+1, ADC_MAX);
-    }
+    analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinElevator), Elevator_OFFSET, ANALOG_DEADBAND);
+    Elevator_value = mapCalibratedStickValue(analogVal, calValues.elevatorMin, calValues.elevatorCenter, calValues.elevatorMax);
 
-    analogVal = analogRead(analogInPinThrottle);
-    Throttle_value = map(analogVal, calValues.thrMax, calValues.thrMin, ADC_MIN, ADC_MAX);
+    analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinThrottle), Throttle_OFFSET, ANALOG_DEADBAND);
+    Throttle_value = ADC_MAX - mapCalibratedAnalogValue(analogVal, calValues.thrMin, calValues.thrMax);
 
-    analogVal = analogRead(analogInPinRudder);
-    if (analogVal <= calValues.rudderCenter){
-        Rudder_value = map(analogVal,calValues.rudderMin,   calValues.rudderCenter, ADC_MIN, ADC_MID);
-    }
-    else{
-        Rudder_value = map(analogVal,calValues.rudderCenter,   calValues.rudderMax, ADC_MID+1, ADC_MAX);
-    }
+    analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinRudder), Rudder_OFFSET, ANALOG_DEADBAND);
+    Rudder_value = mapCalibratedStickValue(analogVal, calValues.rudderMin, calValues.rudderCenter, calValues.rudderMax);
     
     //Constrain value to avoid overflow
     Aileron_value  = constrain(Aileron_value,  ADC_MIN, ADC_MAX); 
@@ -548,23 +660,6 @@ void loop()
     Throttle_value = constrain(Throttle_value, ADC_MIN, ADC_MAX); 
     Rudder_value   = constrain(Rudder_value,   ADC_MIN, ADC_MAX); 
 
-    //Handdle reverse
-    if (Is_Aileron_Reverse == 1){
-        Aileron_value  = 1023-Aileron_value;
-    }
-    if (Is_Elevator_Reverse == 1){
-        Elevator_value = 1023-Elevator_value;
-    }
-    if (Is_Throttle_Reverse == 1){
-        Throttle_value = 1023-Throttle_value;
-    }
-    if (Is_Rudder_Reverse == 1){
-        Rudder_value   = 1023-Rudder_value;
-    }
-    // rcChannels[AILERON] = map(Aileron_value, 1023 - ANALOG_CUTOFF, ANALOG_CUTOFF, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);   // reverse
-    // rcChannels[ELEVATOR] = map(Elevator_value, 1023 - ANALOG_CUTOFF, ANALOG_CUTOFF, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX); // reverse
-    // rcChannels[THROTTLE] = map(Throttle_value, 1023 - ANALOG_CUTOFF, ANALOG_CUTOFF, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX); // reverse
-    // rcChannels[RUDDER] = map(Rudder_value, ANALOG_CUTOFF, 1023 - ANALOG_CUTOFF, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
     rcChannels[AILERON]   = map(Aileron_value,  ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX); 
     rcChannels[ELEVATOR]  = map(Elevator_value, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
     rcChannels[THROTTLE]  = map(Throttle_value, ADC_MIN, ADC_MAX, CRSF_DIGITAL_CHANNEL_MIN, CRSF_DIGITAL_CHANNEL_MAX);
@@ -574,33 +669,64 @@ void loop()
      * Handel digital input
      */
     AUX1_Arm = digitalRead(DIGITAL_PIN_SWITCH_ARM);
-    #ifdef USE_3POS_SWITCH_AS_CHANNEL_6
-    AUX2_value_HIGH= digitalRead(DIGITAL_PIN_SWITCH_AUX2_HIGH);
-        AUX2_value_LOW = digitalRead(DIGITAL_PIN_SWITCH_AUX2_LOW);
-    #else
-        AUX2_value = digitalRead(DIGITAL_PIN_SWITCH_AUX2);
-    #endif
-    AUX3_value = digitalRead(DIGITAL_PIN_SWITCH_AUX3);
-    if (DIGITAL_PIN_SWITCH_AUX4 != 0){
-      AUX4_value = digitalRead(DIGITAL_PIN_SWITCH_AUX4);
-    }else {
-        AUX4_value = 0;
+
+    AUX2_value_HIGH = digitalRead(DIGITAL_PIN_SWITCH_AUX2_HIGH);
+    AUX2_value_LOW = digitalRead(DIGITAL_PIN_SWITCH_AUX2_LOW);
+
+    int AUX3_value_HIGH = digitalRead(DIGITAL_PIN_SWITCH_AUX3_HIGH);
+    int AUX3_value_LOW = digitalRead(DIGITAL_PIN_SWITCH_AUX3_LOW);
+    int AUX4_value_HIGH = digitalRead(DIGITAL_PIN_SWITCH_AUX4_HIGH);
+    int AUX4_value_LOW = digitalRead(DIGITAL_PIN_SWITCH_AUX4_LOW);
+    AUX3_value = (AUX3_value_HIGH == 0) ? 0 : (AUX3_value_LOW == 0 ? 1 : 0);
+#ifndef USE_A7_AS_CH9
+    AUX4_value = digitalRead(DIGITAL_PIN_SWITCH_AUX8);
+#endif
+
+    // CH5..CH12 follow the custom Nano mapping in the README.
+    rcChannels[AUX1] = (AUX1_Arm == 1) ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
+    rcChannels[AUX2] = mapToCrsfValue(mapCalibratedAnalogValue(
+        applyAnalogOffsetAndDeadband(analogRead(analogInPinCH6), CH6_Offset, ANALOG_DEADBAND),
+        calValues.ch6Min, calValues.ch6Max));
+    rcChannels[AUX3] = mapToCrsfValue(mapCalibratedAnalogValue(
+        applyAnalogOffsetAndDeadband(analogRead(analogInPinCH7), CH7_Offset, ANALOG_DEADBAND),
+        calValues.ch7Min, calValues.ch7Max));
+    rcChannels[AUX4] = mapToCrsfValue(mapCalibratedAnalogValue(
+        applyAnalogOffsetAndDeadband(analogRead(analogInPinCH8), CH8_Offset, ANALOG_DEADBAND),
+        calValues.ch8Min, calValues.ch8Max));
+#ifdef USE_A7_AS_CH9
+    rcChannels[AUX5] = mapToCrsfValue(mapCalibratedAnalogValue(
+        applyAnalogOffsetAndDeadband(analogRead(analogInPinCH9), 0, ANALOG_DEADBAND),
+        calValues.ch9Min, calValues.ch9Max));
+#else
+    rcChannels[AUX5] = (AUX4_value == 1) ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
+#endif
+    rcChannels[AUX6] = (AUX4_value_HIGH == 0) ? CRSF_DIGITAL_CHANNEL_MAX :
+                       (AUX4_value_LOW == 0) ? CRSF_DIGITAL_CHANNEL_MIN :
+                       CRSF_DIGITAL_CHANNEL_MID;
+    rcChannels[AUX7] = (AUX3_value_HIGH == 0) ? CRSF_DIGITAL_CHANNEL_MAX :
+                       (AUX3_value_LOW == 0) ? CRSF_DIGITAL_CHANNEL_MIN :
+                       CRSF_DIGITAL_CHANNEL_MID;
+    rcChannels[AUX8] = (AUX2_value_HIGH == 0) ? CRSF_DIGITAL_CHANNEL_MAX :
+                       (AUX2_value_LOW == 0) ? CRSF_DIGITAL_CHANNEL_MIN :
+                       CRSF_DIGITAL_CHANNEL_MID;
+
+    // Unused extended channels remain centered unless extra hardware is added.
+    rcChannels[AUX9] = CRSF_DIGITAL_CHANNEL_MID;
+    rcChannels[AUX10] = CRSF_DIGITAL_CHANNEL_MID;
+    rcChannels[AUX11] = CRSF_DIGITAL_CHANNEL_MID;
+#ifdef USE_A7_AS_CH9
+    rcChannels[AUX12] = CRSF_DIGITAL_CHANNEL_MID;
+#else
+    rcChannels[AUX12] = mapToCrsfValue(analogRead(VOLTAGE_READ_PIN));
+#endif
+
+    for (uint8_t channel = 0; channel < CRSF_MAX_CHANNEL; channel++) {
+        if (Is_Channel_Reverse[channel] == 1) {
+            rcChannels[channel] = CRSF_DIGITAL_CHANNEL_MIN + CRSF_DIGITAL_CHANNEL_MAX - rcChannels[channel];
+        }
     }
-    
-    // Aux Channels
-    rcChannels[AUX1] = (AUX1_Arm == 1)   ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
-    #ifdef USE_3POS_SWITCH_AS_CHANNEL_6
-    rcChannels[AUX2] = (AUX2_value_HIGH == 0) ? CRSF_DIGITAL_CHANNEL_MAX :
-    (AUX2_value_LOW == 0) ? CRSF_DIGITAL_CHANNEL_MIN :
-     CRSF_DIGITAL_CHANNEL_MID;
-    #else
-        rcChannels[AUX2] = (AUX2_value == 1) ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
-    #endif
-        rcChannels[AUX3] = (AUX3_value == 1) ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX; 
-    if (DIGITAL_PIN_SWITCH_AUX4 != 0){
-      rcChannels[AUX4] = (AUX4_value == 1) ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
-    }
-    if(stickInt=0){
+
+    if(stickInt == 0){
         previous_throttle=rcChannels[THROTTLE];
         stickInt=1;
     }
