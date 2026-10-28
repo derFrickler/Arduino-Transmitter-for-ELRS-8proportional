@@ -55,17 +55,14 @@ int Is_Channel_Reverse[16] = {
 // A4 = CH6 analog input
 // A5 = CH7 analog input
 // A6 = CH8 analog input
-// A7 = CH9 analog input by default
+// A7 = CH9 analog input
 
 // D5 = CH5 toggle switch
 // D6 + D7 = CH12 3-position switch pair
 // D10 + D11 = CH11 3-position switch pair (AUX3)
 // D8 + D9 = CH10 3-position switch pair
 
-// D4 = alternate CH9 digital input when USE_A7_AS_CH9 is disabled
-
-// Comment out to use D4 as CH9 and A7 for battery voltage sensing.
-#define USE_A7_AS_CH9
+// A7 is reserved for analog CH9.
 
 // D2 = LED output
 // D3 = Buzzer output
@@ -78,11 +75,7 @@ const int analogInPinRudder = A3;
 const int analogInPinCH6  = A4; // CH6
 const int analogInPinCH7  = A5; // CH7
 const int analogInPinCH8  = A6; // CH8
-#ifdef USE_A7_AS_CH9
 const int analogInPinCH9 = A7; // CH9
-#else
-const int VOLTAGE_READ_PIN = A7; // battery voltage sense on free analog pin
-#endif
 
 // pins used for switch inputs
 const int DIGITAL_PIN_SWITCH_ARM = 5;            // CH5 toggle switch
@@ -92,8 +85,6 @@ const int DIGITAL_PIN_SWITCH_AUX3_HIGH = 10;    // CH11 3-position switch high p
 const int DIGITAL_PIN_SWITCH_AUX3_LOW = 11;     // CH11 3-position switch low pin (AUX3)
 const int DIGITAL_PIN_SWITCH_AUX4_HIGH = 8;     // CH10 3-position switch high pin
 const int DIGITAL_PIN_SWITCH_AUX4_LOW = 9;      // CH10 3-position switch low pin
-const int DIGITAL_PIN_SWITCH_AUX8 = 4;           // alternate CH9 digital input
-
 // pins used for output
 const int DIGITAL_PIN_LED = 2;  
 
@@ -111,11 +102,10 @@ const char * STARTUP_MELODY = "Melody:d=32,o=4,b=570:4b,p,4e5,p,4b,p,4f#5,2p,4e5
 const char * STICK_MOVE_WARNING ="tetris:d=4,o=5,b=160:e6,8b,8c6,8d6,16e6,16d6,8c6,8b,a,8a,8c6,e6,8d6,8c6,b,8b,8c6,d6,e6,c6,a,2a,8p,d6,8f6,a6,8g6,8f6,e6,8e6,8c6,e6,8d6,8c6,b,8b,8c6,d6,e6,c6,a,a";
 #endif
 //----- Voltage monitoring -------------------------
-// Define battery warning voltage
-const float VOLTAGE_SCALE = 103.0;
-const float WARNING_VOLTAGE = 7.4; // 2S Lipo 3.7v per cell
-const float BEEPING_VOLTAGE = 7.0; // 2S Lipo 3.5v per cell
-const float ON_USB = 5.2;          // On USB power / no battery
+// Internal VCC thresholds; these do not directly measure VIN.
+const unsigned int BANDGAP_REFERENCE_MILLIVOLTS = 1100;
+const unsigned int VCC_WARNING_MILLIVOLTS = 4900;
+const unsigned int VCC_BEEPING_MILLIVOLTS = 4700;
 
 // Define Commond for start Up Setting
 #define RC_MIN_COMMAND 600

@@ -48,7 +48,8 @@ int AUX2_value = 0;
 int AUX3_value = 0;
 int AUX4_value = 0;
 
-float batteryVoltage;
+uint16_t supplyVoltageMillivolts;
+uint32_t lastVoltageSampleMillis = 0;
 
 int currentPktRate = 0;
 int currentPower = 0;
@@ -310,11 +311,9 @@ bool calibrationProcess() {
         if (val < calValues.ch8Min) calValues.ch8Min = val;
         if (val > calValues.ch8Max) calValues.ch8Max = val;
 
-#ifdef USE_A7_AS_CH9
         val = analogRead(analogInPinCH9);
         if (val < calValues.ch9Min) calValues.ch9Min = val;
         if (val > calValues.ch9Max) calValues.ch9Max = val;
-#endif
 
         // Double beep and blink every 500ms
         if (millis() % 500 == 0) {
@@ -502,6 +501,29 @@ static int applyAnalogOffsetAndDeadband(int rawValue, int offset, int deadband) 
     return rawValue;
 }
 
+static uint16_t readSupplyVoltageMillivolts() {
+    const uint8_t previousAdmux = ADMUX;
+    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+    delay(2);
+
+    ADCSRA |= _BV(ADSC);
+    while (ADCSRA & _BV(ADSC)) {}
+    const uint8_t lowByte = ADCL;
+    const uint8_t highByte = ADCH;
+    const uint16_t bandgapReading = (static_cast<uint16_t>(highByte) << 8) | lowByte;
+
+    ADMUX = previousAdmux;
+    ADCSRA |= _BV(ADSC);
+    while (ADCSRA & _BV(ADSC)) {}
+    (void)ADCL;
+    (void)ADCH;
+
+    if (bandgapReading == 0) {
+        return 0;
+    }
+    return (BANDGAP_REFERENCE_MILLIVOLTS * 1023UL) / bandgapReading;
+}
+
 void setup()
 {
     // inialize rc data
@@ -509,7 +531,9 @@ void setup()
         rcChannels[i] = CRSF_DIGITAL_CHANNEL_MIN;
     }
 
-    analogReference(EXTERNAL);
+    analogReference(DEFAULT);
+    supplyVoltageMillivolts = readSupplyVoltageMillivolts();
+    lastVoltageSampleMillis = millis();
     pinMode(DIGITAL_PIN_SWITCH_ARM, INPUT_PULLUP);
     pinMode(DIGITAL_PIN_SWITCH_AUX2_HIGH, INPUT_PULLUP);
     pinMode(DIGITAL_PIN_SWITCH_AUX2_LOW, INPUT_PULLUP);
@@ -517,7 +541,6 @@ void setup()
     pinMode(DIGITAL_PIN_SWITCH_AUX3_LOW, INPUT_PULLUP);
     pinMode(DIGITAL_PIN_SWITCH_AUX4_HIGH, INPUT_PULLUP);
     pinMode(DIGITAL_PIN_SWITCH_AUX4_LOW, INPUT_PULLUP);
-    pinMode(DIGITAL_PIN_SWITCH_AUX8, INPUT_PULLUP);
     pinMode(DIGITAL_PIN_LED, OUTPUT);    // LED
     pinMode(DIGITAL_PIN_BUZZER, OUTPUT); // BUZZER
 #ifdef PASSIVE_BUZZER
@@ -526,8 +549,6 @@ void setup()
       rtttl::begin(DIGITAL_PIN_BUZZER, STARTUP_MELODY);
     }
 #endif
-    // inialize voltage:
-    batteryVoltage = 0.0;
 #ifdef PPMOUTPUT
     pinMode(ppmPin, OUTPUT);
     digitalWrite(ppmPin, !onState); // set the PPM signal pin to the default state (off)
@@ -600,17 +621,19 @@ void loop()
     #endif
     uint32_t currentMicros = micros();
 
-    // A7 is reserved for CH9 when that option is enabled.
-#ifndef USE_A7_AS_CH9
-    batteryVoltage = analogRead(VOLTAGE_READ_PIN) / VOLTAGE_SCALE; //98.5
+    const uint32_t voltageSampleMillis = millis();
+    if (voltageSampleMillis - lastVoltageSampleMillis >= 30000) {
+        supplyVoltageMillivolts = readSupplyVoltageMillivolts();
+        lastVoltageSampleMillis = voltageSampleMillis;
+    }
 #ifdef DEBUG
-    Serial.print("batteryVoltage:");
-    Serial.print(batteryVoltage);
-    Serial.print("v ");
+    Serial.print("VCC:");
+    Serial.print(supplyVoltageMillivolts);
+    Serial.print("mV ");
 #endif
-    if (batteryVoltage < WARNING_VOLTAGE && batteryVoltage >= BEEPING_VOLTAGE) {
+    if (supplyVoltageMillivolts < VCC_WARNING_MILLIVOLTS && supplyVoltageMillivolts >= VCC_BEEPING_MILLIVOLTS) {
         blinkLED(DIGITAL_PIN_LED, 1000);
-    }else if(batteryVoltage < BEEPING_VOLTAGE && batteryVoltage >= ON_USB){
+    }else if(supplyVoltageMillivolts < VCC_BEEPING_MILLIVOLTS && supplyVoltageMillivolts > 0){
         blinkLED(DIGITAL_PIN_LED, 250);
         playingTones(2);
     }else if(currentSetting == 3){
@@ -618,13 +641,6 @@ void loop()
     }else if(currentSetting == 4){
         blinkLED(DIGITAL_PIN_LED, 1000); // Wifi (slow flash)
     }
-#else
-    if (currentSetting == 3) {
-        blinkLED(DIGITAL_PIN_LED, 100);
-    } else if (currentSetting == 4) {
-        blinkLED(DIGITAL_PIN_LED, 1000);
-    }
-#endif
 
     if (checkStickMove() == true){
         blinkLED(DIGITAL_PIN_LED, 100);
@@ -678,10 +694,6 @@ void loop()
     int AUX4_value_HIGH = digitalRead(DIGITAL_PIN_SWITCH_AUX4_HIGH);
     int AUX4_value_LOW = digitalRead(DIGITAL_PIN_SWITCH_AUX4_LOW);
     AUX3_value = (AUX3_value_HIGH == 0) ? 0 : (AUX3_value_LOW == 0 ? 1 : 0);
-#ifndef USE_A7_AS_CH9
-    AUX4_value = digitalRead(DIGITAL_PIN_SWITCH_AUX8);
-#endif
-
     // CH5..CH12 follow the custom Nano mapping in the README.
     rcChannels[AUX1] = (AUX1_Arm == 1) ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
     rcChannels[AUX2] = mapToCrsfValue(mapCalibratedAnalogValue(
@@ -693,13 +705,9 @@ void loop()
     rcChannels[AUX4] = mapToCrsfValue(mapCalibratedAnalogValue(
         applyAnalogOffsetAndDeadband(analogRead(analogInPinCH8), CH8_Offset, ANALOG_DEADBAND),
         calValues.ch8Min, calValues.ch8Max));
-#ifdef USE_A7_AS_CH9
     rcChannels[AUX5] = mapToCrsfValue(mapCalibratedAnalogValue(
         applyAnalogOffsetAndDeadband(analogRead(analogInPinCH9), 0, ANALOG_DEADBAND),
         calValues.ch9Min, calValues.ch9Max));
-#else
-    rcChannels[AUX5] = (AUX4_value == 1) ? CRSF_DIGITAL_CHANNEL_MIN : CRSF_DIGITAL_CHANNEL_MAX;
-#endif
     rcChannels[AUX6] = (AUX4_value_HIGH == 0) ? CRSF_DIGITAL_CHANNEL_MAX :
                        (AUX4_value_LOW == 0) ? CRSF_DIGITAL_CHANNEL_MIN :
                        CRSF_DIGITAL_CHANNEL_MID;
@@ -714,11 +722,7 @@ void loop()
     rcChannels[AUX9] = CRSF_DIGITAL_CHANNEL_MID;
     rcChannels[AUX10] = CRSF_DIGITAL_CHANNEL_MID;
     rcChannels[AUX11] = CRSF_DIGITAL_CHANNEL_MID;
-#ifdef USE_A7_AS_CH9
     rcChannels[AUX12] = CRSF_DIGITAL_CHANNEL_MID;
-#else
-    rcChannels[AUX12] = mapToCrsfValue(analogRead(VOLTAGE_READ_PIN));
-#endif
 
     for (uint8_t channel = 0; channel < CRSF_MAX_CHANNEL; channel++) {
         if (Is_Channel_Reverse[channel] == 1) {

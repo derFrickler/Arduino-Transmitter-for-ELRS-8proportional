@@ -37,12 +37,11 @@ The project uses the Nano hardware serial port:
 | A4 | Analog input | CH6 |
 | A5 | Analog input | CH7 |
 | A6 | Analog input | CH8 |
-| A7 | Analog input (default) | CH9 |
+| A7 | Analog input | CH9 |
 | D5 | Toggle switch | CH5 |
 | D6 + D7 | 3-position switch pair | CH12 |
 | D8 + D9 | 3-position switch pair | CH10 |
 | D10 + D11 | 3-position switch pair | CH11 |
-| D4 | Alternate digital input when A7 mode is disabled | CH9 |
 
 ### Output / status pins
 
@@ -67,25 +66,21 @@ The current custom mapping follows the requested hardware layout:
 | CH6 | A4 analog input |
 | CH7 | A5 analog input |
 | CH8 | A6 analog input |
-| CH9 | A7 analog input by default; D4 when `USE_A7_AS_CH9` is disabled |
+| CH9 | A7 analog input |
 | CH10 | D8 + D9 3-position switch pair |
 | CH11 | D10 + D11 3-position switch pair |
 | CH12 | D6 + D7 3-position switch pair |
 | CH13..CH16 | centered unless otherwise configured |
 
-## A7 and battery sensing
+## VCC monitoring
 
-`USE_A7_AS_CH9` is enabled by default in [src/config.h](src/config.h). In this mode:
+Eevery 30 seconds, the firmware measures the Nano's VCC using the internal 1.1 V bandgap, then restores the ADC channel selection. Potentiometers use the default 5 V AVcc reference.
 
-- A7 is calibrated and transmitted as CH9.
-- Battery voltage monitoring is disabled because A7 is no longer connected to the battery sense divider.
-- CH16 remains centered.
-
-Comment out `USE_A7_AS_CH9` to use D4 as the CH9 digital input and A7 for battery sensing instead.
+The LED warning starts below 4.9 V VCC, and the buzzer alarm starts below 4.7 V VCC. Both thresholds are configurable with `VCC_WARNING_MILLIVOLTS` and `VCC_BEEPING_MILLIVOLTS` in [src/config.h](src/config.h). The internal measurement observes regulated VCC, not VIN: while the regulator holds VCC steady, firmware cannot determine whether VIN is 6.5 V. An exact VIN threshold requires a voltage divider connected to an ADC pin. The nominal 1.1 V bandgap varies between chips, so calibrate the reference value if more precise thresholds are needed.
 
 ## Analog calibration
 
-The calibration routine covers all active analog inputs: A0–A3 for the four stick axes, A4–A6 for CH6–CH8, and A7 for CH9 when `USE_A7_AS_CH9` is enabled. With `GIMBAL_CALIBRATION` enabled in `src/main.cpp`, hold the stick axes centered for the first 5 seconds, then move each analog control through its full range for the next 15 seconds. The calibrated ranges are saved to EEPROM. Existing calibration data is reinitialized after this calibration format change.
+The calibration routine covers all active analog inputs: A0–A3 for the four stick axes, A4–A6 for CH6–CH8, and A7 for CH9. With `GIMBAL_CALIBRATION` enabled in `src/main.cpp`, hold the stick axes centered for the first 5 seconds, then move each analog control through its full range for the next 15 seconds. The calibrated ranges are saved to EEPROM. Existing calibration data is reinitialized after this calibration format change.
 
 ## Channel reverse
 
@@ -113,6 +108,6 @@ platformio run --target upload
 
 ## Notes
 
-- `analogReference(EXTERNAL)` is used, so the analog reference voltage must be valid for the connected potentiometers and voltage divider.
+- The potentiometers use the Nano's default AVcc ADC reference; the bandgap-based VCC reading uses the nominal 1.1 V bandgap value, which may need calibration for a precise threshold.
 - Some inputs are optional depending on hardware and config.
 - The current pin assignment reflects the project’s current Nano wiring and is intended as the master reference for this build.
