@@ -132,3 +132,51 @@ void CRSF::crsfPrepareCmdPacket(uint8_t packetCmd[], uint8_t command, uint8_t va
 void CRSF::CrsfWritePacket(uint8_t packet[], uint8_t packetLength) {
     port.write(packet, packetLength);
 }
+
+uint16_t CRSF::readBatteryVoltageMillivolts() {
+    static uint8_t rxBuffer[CRSF_FRAME_SIZE_MAX];
+    static uint8_t rxCount = 0;
+
+    while (port.available() > 0) {
+        const uint8_t byte = port.read();
+        rxBuffer[rxCount++] = byte;
+
+        if (rxCount < 2) {
+            continue;
+        }
+
+        const uint8_t frameLength = rxBuffer[1];
+        if (frameLength == 0 || frameLength > (CRSF_FRAME_SIZE_MAX - 2)) {
+            rxCount = 0;
+            continue;
+        }
+
+        const uint8_t totalFrameLength = 2U + frameLength;
+        if (rxCount < totalFrameLength) {
+            continue;
+        }
+
+        const uint8_t frameType = rxBuffer[2];
+        if (rxBuffer[0] == CRSF_ADDRESS_RADIO && frameType == CRSF_TYPE_BATTERY_SENSOR && frameLength >= 6) {
+            const uint16_t rawVoltage = (static_cast<uint16_t>(rxBuffer[3]) << 8) | static_cast<uint16_t>(rxBuffer[4]);
+            const uint16_t telemetryVoltageMillivolts = rawVoltage * 100U;
+
+            if (rxCount > totalFrameLength) {
+                memmove(rxBuffer, &rxBuffer[totalFrameLength], rxCount - totalFrameLength);
+                rxCount -= totalFrameLength;
+            } else {
+                rxCount = 0;
+            }
+            return telemetryVoltageMillivolts;
+        }
+
+        if (rxCount > totalFrameLength) {
+            memmove(rxBuffer, &rxBuffer[totalFrameLength], rxCount - totalFrameLength);
+            rxCount -= totalFrameLength;
+        } else {
+            rxCount = 0;
+        }
+    }
+
+    return 0;
+}

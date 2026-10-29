@@ -8,27 +8,29 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "/Users/hermen/Resilio Sync/CODEREPO/_Modellbau/Arduino-Transmitter-for-ELRS-8proportional/SimpleTX/src",
-                "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
-                "/Users/hermen/.platformio/packages/framework-arduino-avr/cores/arduino",
-                "/Users/hermen/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
-                "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/HID/src",
-                "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
-                "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
-                "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                "/media/daten/CODEREPO/_Modellbau/Arduino-Transmitter-for-ELRS-8proportional/SimpleTX/src",
+                "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                "/media/daten/CODEREPO/_Modellbau/Arduino-Transmitter-for-ELRS-8proportional/SimpleTX/.pio/libdeps/nanoatmega328/Adafruit NeoPixel",
+                "/home/hermenj/.platformio/packages/framework-arduino-avr/cores/arduino",
+                "/home/hermenj/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
                 ""
             ],
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "/Users/hermen/Resilio Sync/CODEREPO/_Modellbau/Arduino-Transmitter-for-ELRS-8proportional/SimpleTX/src",
-                    "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
-                    "/Users/hermen/.platformio/packages/framework-arduino-avr/cores/arduino",
-                    "/Users/hermen/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
-                    "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/HID/src",
-                    "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
-                    "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
-                    "/Users/hermen/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
+                    "/media/daten/CODEREPO/_Modellbau/Arduino-Transmitter-for-ELRS-8proportional/SimpleTX/src",
+                    "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/EEPROM/src",
+                    "/media/daten/CODEREPO/_Modellbau/Arduino-Transmitter-for-ELRS-8proportional/SimpleTX/.pio/libdeps/nanoatmega328/Adafruit NeoPixel",
+                    "/home/hermenj/.platformio/packages/framework-arduino-avr/cores/arduino",
+                    "/home/hermenj/.platformio/packages/framework-arduino-avr/variants/eightanaloginputs",
+                    "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/HID/src",
+                    "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/SPI/src",
+                    "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/SoftwareSerial/src",
+                    "/home/hermenj/.platformio/packages/framework-arduino-avr/libraries/Wire/src",
                     ""
                 ]
             },
@@ -43,7 +45,7 @@
             ],
             "cStandard": "gnu11",
             "cppStandard": "gnu++11",
-            "compilerPath": "/Users/hermen/.platformio/packages/toolchain-atmelavr/bin/avr-gcc",
+            "compilerPath": "/home/hermenj/.platformio/packages/toolchain-atmelavr/bin/avr-gcc",
             "compilerArgs": [
                 "-mmcu=atmega328p",
                 ""

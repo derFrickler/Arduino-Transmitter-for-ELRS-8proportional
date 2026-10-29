@@ -88,6 +88,11 @@ const int DIGITAL_PIN_SWITCH_AUX4_LOW = 9;      // CH10 3-position switch low pi
 // pins used for output
 const int DIGITAL_PIN_LED = 2;  
 
+// optional WS2812 status strip on the free D4 pin
+const int DIGITAL_PIN_WS2812 = 4;
+const int WS2812_COUNT = 3;
+const uint8_t WS2812_BRIGHTNESS = 32;
+
 // pins that used for buzzer
 // Active buzzer only plays one tone (often used on Flight controllers as a beeper)
 //#define ACTIVE_BUZZER

@@ -23,6 +23,7 @@
  */
 
 #include <Arduino.h>
+#include <Adafruit_NeoPixel.h>
 #include "NonBlockingRtttl.h"
 #include "EEPROM.h"
 #include "config.h"
@@ -49,6 +50,7 @@ int AUX3_value = 0;
 int AUX4_value = 0;
 
 uint16_t supplyVoltageMillivolts;
+uint16_t crsfTelemetryVoltageMillivolts;
 uint32_t lastVoltageSampleMillis = 0;
 
 int currentPktRate = 0;
@@ -67,6 +69,7 @@ int16_t rcChannels[CRSF_MAX_CHANNEL];
 uint32_t crsfTime = 0;
 
 CRSF crsfClass;
+Adafruit_NeoPixel ws2812Strip(WS2812_COUNT, DIGITAL_PIN_WS2812, NEO_GRB + NEO_KHZ800);
 
 bool calStatus=false;
 
@@ -524,6 +527,50 @@ static uint16_t readSupplyVoltageMillivolts() {
     return (BANDGAP_REFERENCE_MILLIVOLTS * 1023UL) / bandgapReading;
 }
 
+static uint32_t batteryColorFromVoltage(uint16_t voltageMillivolts, uint16_t minimumVoltageMillivolts, uint16_t maximumVoltageMillivolts) {
+    if (voltageMillivolts == 0) {
+        return 0;
+    }
+
+    if (voltageMillivolts < 5000U) {
+        return ws2812Strip.Color(255, 0, 0);
+    }
+
+    const uint16_t minVoltage = minimumVoltageMillivolts;
+    const uint16_t maxVoltage = maximumVoltageMillivolts;
+    const uint16_t range = (maxVoltage > minVoltage) ? (maxVoltage - minVoltage) : 1;
+    const uint16_t clamped = constrain(voltageMillivolts, minVoltage, maxVoltage);
+    const uint16_t normalized = (clamped - minVoltage) * 255U / range;
+
+    const uint8_t green = 255U - normalized;
+    const uint8_t red = normalized;
+    return ws2812Strip.Color(red, green, 0);
+}
+
+static void updateWs2812Status() {
+    ws2812Strip.clear();
+
+    ws2812Strip.setPixelColor(0, batteryColorFromVoltage(
+        supplyVoltageMillivolts,
+        4700U,
+        5000U
+    ));
+
+    ws2812Strip.setPixelColor(1, batteryColorFromVoltage(
+        crsfTelemetryVoltageMillivolts,
+        10000,
+        14000
+    ));
+
+    if (loopCount > 500) {
+        ws2812Strip.setPixelColor(2, ws2812Strip.Color(0, 255, 0));
+    } else {
+        ws2812Strip.setPixelColor(2, ws2812Strip.Color(255, 0, 0));
+    }
+
+    ws2812Strip.show();
+}
+
 void setup()
 {
     // inialize rc data
@@ -531,8 +578,14 @@ void setup()
         rcChannels[i] = CRSF_DIGITAL_CHANNEL_MIN;
     }
 
+    ws2812Strip.begin();
+    ws2812Strip.setBrightness(WS2812_BRIGHTNESS);
+    ws2812Strip.clear();
+    ws2812Strip.show();
+
     analogReference(DEFAULT);
     supplyVoltageMillivolts = readSupplyVoltageMillivolts();
+    crsfTelemetryVoltageMillivolts = 0;
     lastVoltageSampleMillis = millis();
     pinMode(DIGITAL_PIN_SWITCH_ARM, INPUT_PULLUP);
     pinMode(DIGITAL_PIN_SWITCH_AUX2_HIGH, INPUT_PULLUP);
@@ -626,9 +679,13 @@ void loop()
         supplyVoltageMillivolts = readSupplyVoltageMillivolts();
         lastVoltageSampleMillis = voltageSampleMillis;
     }
+    crsfTelemetryVoltageMillivolts = crsfClass.readBatteryVoltageMillivolts();
 #ifdef DEBUG
     Serial.print("VCC:");
     Serial.print(supplyVoltageMillivolts);
+    Serial.print("mV ");
+    Serial.print("CRSF:");
+    Serial.print(crsfTelemetryVoltageMillivolts);
     Serial.print("mV ");
 #endif
     if (supplyVoltageMillivolts < VCC_WARNING_MILLIVOLTS && supplyVoltageMillivolts >= VCC_BEEPING_MILLIVOLTS) {
@@ -653,6 +710,7 @@ void loop()
       }
     }
 #endif
+    updateWs2812Status();
 
     /*
      * Handle analog input

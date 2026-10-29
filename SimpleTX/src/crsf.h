@@ -48,6 +48,9 @@
 
 // ELRS command
 #define ELRS_ADDRESS                    0xEE
+#define CRSF_ADDRESS_RADIO              0xEA //  Radio Transmitter
+#define CRSF_ADDRESS_MODULE             0xEE //  ELRS module
+#define CRSF_TYPE_BATTERY_SENSOR        0x08
 #define ELRS_PKT_RATE_COMMAND           0x01
 #define ELRS_TLM_RATIO_COMMAND          0x02
 #define ELRS_SWITCH_MODE_COMMAND        0x03
@@ -59,7 +62,7 @@
 #define ELRS_BIND_COMMAND               0x11
 #define ELRS_START_COMMAND              0x04
 #define TYPE_SETTINGS_WRITE             0x2D
-#define ADDR_RADIO                      0xEA //  Radio Transmitter
+#define ADDR_RADIO                      CRSF_ADDRESS_RADIO
 #define port                            Serial
 
 class CRSF {
@@ -68,6 +71,7 @@ public:
     void crsfPrepareDataPacket(uint8_t packet[], int16_t channels[]);
     void crsfPrepareCmdPacket(uint8_t packetCmd[], uint8_t command, uint8_t value);
     void CrsfWritePacket(uint8_t packet[], uint8_t packetLength);
+    uint16_t readBatteryVoltageMillivolts();
 };
 
 /* ESP32 Team900
