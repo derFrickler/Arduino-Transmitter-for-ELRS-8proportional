@@ -59,8 +59,8 @@ int Is_Channel_Reverse[16] = {
 
 // D5 = CH5 toggle switch
 // D6 + D7 = CH12 3-position switch pair
-// D10 + D11 = CH11 3-position switch pair (AUX3)
 // D8 + D9 = CH10 3-position switch pair
+// D10 + D11 = CH11 3-position switch pair (AUX3)
 
 // A7 is reserved for analog CH9.
 
@@ -86,7 +86,7 @@ const int DIGITAL_PIN_SWITCH_AUX3_LOW = 11;     // CH11 3-position switch low pi
 const int DIGITAL_PIN_SWITCH_AUX4_HIGH = 8;     // CH10 3-position switch high pin
 const int DIGITAL_PIN_SWITCH_AUX4_LOW = 9;      // CH10 3-position switch low pin
 // pins used for output
-const int DIGITAL_PIN_LED = 2;  
+const int DIGITAL_PIN_LED = 13;  
 
 // optional WS2812 status strip on the free D4 pin
 const int DIGITAL_PIN_WS2812 = 4;
