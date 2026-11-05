@@ -31,7 +31,7 @@
 #include "led.h"
 #include "tone.h"
 
-//#define DEBUG // if not commented out, Serial.print() is active! For debugging only!!
+#define DEBUG // if not commented out, Serial.print() is active! For debugging only!!
 //#define GIMBAL_CALIBRATION // if not commented out, Serial.print() is active! For debugging only!!
 
 int Aileron_value = 0; // values read from the pot
@@ -40,6 +40,7 @@ int Throttle_value = 0;
 int Rudder_value = 0;
 int previous_throttle = 191;
 
+uint32_t lastDebugPrintMillis = 0;
 int loopCount = 0; // for ELRS seeting
 
 int AUX1_Arm = 0; // switch values read from the digital pin
@@ -681,12 +682,14 @@ void loop()
     }
     crsfTelemetryVoltageMillivolts = crsfClass.readBatteryVoltageMillivolts();
 #ifdef DEBUG
+/*
     Serial.print("VCC:");
     Serial.print(supplyVoltageMillivolts);
     Serial.print("mV ");
     Serial.print("CRSF:");
     Serial.print(crsfTelemetryVoltageMillivolts);
     Serial.print("mV ");
+    */
 #endif
     if (supplyVoltageMillivolts < VCC_WARNING_MILLIVOLTS && supplyVoltageMillivolts >= VCC_BEEPING_MILLIVOLTS) {
         blinkLED(DIGITAL_PIN_LED, 1000);
@@ -716,16 +719,20 @@ void loop()
      * Handle analog input
      */
     // constrain to avoid overflow
-    int analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinAileron), Aileron_OFFSET, ANALOG_DEADBAND);
+    const int rawAileron = analogRead(analogInPinAileron);
+    int analogVal = applyAnalogOffsetAndDeadband(rawAileron, Aileron_OFFSET, ANALOG_DEADBAND);
     Aileron_value = mapCalibratedStickValue(analogVal, calValues.aileronMin, calValues.aileronCenter, calValues.aileronMax);
     
-    analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinElevator), Elevator_OFFSET, ANALOG_DEADBAND);
+    const int rawElevator = analogRead(analogInPinElevator);
+    analogVal = applyAnalogOffsetAndDeadband(rawElevator, Elevator_OFFSET, ANALOG_DEADBAND);
     Elevator_value = mapCalibratedStickValue(analogVal, calValues.elevatorMin, calValues.elevatorCenter, calValues.elevatorMax);
 
-    analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinThrottle), Throttle_OFFSET, ANALOG_DEADBAND);
+    const int rawThrottle = analogRead(analogInPinThrottle);
+    analogVal = applyAnalogOffsetAndDeadband(rawThrottle, Throttle_OFFSET, ANALOG_DEADBAND);
     Throttle_value = ADC_MAX - mapCalibratedAnalogValue(analogVal, calValues.thrMin, calValues.thrMax);
 
-    analogVal = applyAnalogOffsetAndDeadband(analogRead(analogInPinRudder), Rudder_OFFSET, ANALOG_DEADBAND);
+    const int rawRudder = analogRead(analogInPinRudder);
+    analogVal = applyAnalogOffsetAndDeadband(rawRudder, Rudder_OFFSET, ANALOG_DEADBAND);
     Rudder_value = mapCalibratedStickValue(analogVal, calValues.rudderMin, calValues.rudderCenter, calValues.rudderMax);
     
     //Constrain value to avoid overflow
@@ -799,20 +806,47 @@ void loop()
 
     if (currentMicros > crsfTime) {
         #ifdef DEBUG
-            //Serial.println("DEBUG");
-        Serial.print(" AILERON:");
-        Serial.print(rcChannels[AILERON]);
-        Serial.print(" ELEVATOR:");
-        Serial.print(rcChannels[ELEVATOR] );
-        Serial.print(" THROTTLE:");
-        Serial.print(rcChannels[THROTTLE]);
-        Serial.print(" RUDDER:");
-        Serial.print(rcChannels[RUDDER] );
-        Serial.print(" stickstatus:");
-        Serial.print(stickMoved);
-        Serial.print(" previous_throttle:");
-        Serial.print(previous_throttle);
-        Serial.println(); 
+            if (millis() - lastDebugPrintMillis >= 1000UL) {
+                Serial.print("IN1-8:\t");
+                Serial.print(rawAileron);
+                Serial.print("\t");
+                Serial.print(rawElevator);
+                Serial.print("\t");
+                Serial.print(rawThrottle);
+                Serial.print("\t");
+                Serial.print(rawRudder);
+                Serial.print("\t");
+                Serial.print(analogRead(analogInPinCH6));
+                Serial.print("\t");
+                Serial.print(analogRead(analogInPinCH7));
+                Serial.print("\t");
+                Serial.print(analogRead(analogInPinCH8));
+                Serial.print("\t");
+                Serial.print(analogRead(analogInPinCH9));
+
+                Serial.print("\tOUT1-8:\t");
+                for (uint8_t channel = 0; channel < 8; channel++) {
+                    Serial.print(rcChannels[channel]);
+                    if (channel + 1 < 8) {
+                        Serial.print("\t");
+                    }
+                }
+
+                Serial.print("\tOTHER:\t");
+                for (uint8_t channel = 8; channel < CRSF_MAX_CHANNEL; channel++) {
+                    Serial.print(rcChannels[channel]);
+                    if (channel + 1 < CRSF_MAX_CHANNEL) {
+                        Serial.print("\t");
+                    }
+                }
+
+                Serial.print("\t");
+                Serial.print(stickMoved);
+                Serial.print("\t");
+                Serial.print(previous_throttle);
+                Serial.println();
+                lastDebugPrintMillis = millis();
+            }
         #else
             if (loopCount <= 500) { // repeat 500 packets to build connection to TX module
                 // Build commond packet
